@@ -41,7 +41,7 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-          cache-dependency-path: backend/pom.xml
+          cache-dependency-path: bank-api/pom.xml
 
       # 3. Dar permisos al Maven Wrapper en Linux
       - name: Make Maven Wrapper executable
