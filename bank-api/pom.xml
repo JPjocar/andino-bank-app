@@ -68,6 +68,56 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
 	</dependencies>
 
 	<build>
@@ -76,6 +126,236 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
+
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.3</version>
+
+                <executions>
+                    <execution>
+                        <id>enforce-build-environment</id>
+                        <phase>validate</phase>
+
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <rules>
+
+                                <!--
+                                    El proyecto debe compilarse con Java 25.
+                                    [25,26) significa >=25 y <26.
+                                -->
+                                <requireJavaVersion>
+                                    <version>[25,26)</version>
+                                </requireJavaVersion>
+
+                                <!--
+                                    Maven mínimo recomendado para el proyecto.
+                                -->
+                                <requireMavenVersion>
+                                    <version>[3.9.0,)</version>
+                                </requireMavenVersion>
+
+                            </rules>
+
+                            <fail>true</fail>
+
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>4.10.4.0</version> <!-- Versión más actualizada y estable -->
+                <configuration>
+                    <effort>Max</effort>          <!-- Hace que el análisis sea ultra profundo -->
+                    <threshold>Medium</threshold>      <!-- Reporta bugs desde prioridad baja hasta alta -->
+                    <failOnError>true</failOnError> <!-- Hace que el build falle si encuentra un problema -->
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>verify</phase>      <!-- Se ejecuta justo al terminar de compilar -->
+                        <goals>
+                            <goal>check</goal>      <!-- Valida el código y aplica las reglas estrictas -->
+                        </goals>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs</artifactId>
+                        <version>4.10.4</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.6.0</version>
+
+                <configuration>
+                    <configLocation>google_checks.xml</configLocation>
+                    <consoleOutput>true</consoleOutput> <!-- Muestra los errores detallados en la terminal -->
+                    <failsOnError>true</failsOnError>   <!-- Detiene el build por completo si hay errores de estilo -->
+                </configuration>
+
+                <executions>
+                    <execution>
+                        <id>checkstyle-validation</id>
+                        <phase>validate</phase> <!-- Lo ata a la fase de validación de Maven -->
+                        <goals>
+                            <goal>check</goal>  <!-- El 'goal' check analiza el código y valida las reglas -->
+                        </goals>
+                    </execution>
+                </executions>
+
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>9.3</version>
+                    </dependency>
+                </dependencies>
+
+
+            </plugin>
+
+
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.15</version>
+
+                <executions>
+
+                    <!--
+                        Instrumenta la JVM antes de ejecutar los tests.
+                    -->
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+
+                        <configuration>
+                            <!--
+                                Permite acumular cobertura producida
+                                por tests unitarios e integración.
+                            -->
+                            <append>true</append>
+                        </configuration>
+
+                    </execution>
+
+
+                    <!--
+                        El reporte se genera al FINAL del ciclo,
+                        después de unit tests e integration tests.
+                    -->
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+
+                    </execution>
+
+
+                    <!--
+                        Quality Gate:
+                        mínimo 80 % de líneas cubiertas.
+                    -->
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+
+                        <configuration>
+
+                            <rules>
+
+                                <rule>
+
+                                    <element>BUNDLE</element>
+
+                                    <limits>
+
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+
+                                    </limits>
+
+                                </rule>
+
+                            </rules>
+
+                        </configuration>
+
+                    </execution>
+
+                </executions>
+
+            </plugin>
+
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.6</version>
+
+                <executions>
+
+                    <execution>
+                        <id>integration-tests</id>
+
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+
+                    </execution>
+
+                </executions>
+
+                <configuration>
+
+                    <!--
+                        Convención:
+                        AccountRepositoryIT.java
+                        AccountControllerIT.java
+                        TransactionIT.java
+                    -->
+                    <includes>
+                        <include>**/*IT.java</include>
+                    </includes>
+
+                    <!--
+                        Si esperamos integración tests, CI debe fallar
+                        cuando accidentalmente no encuentre ninguno.
+                        Puedes poner false mientras empiezas el proyecto.
+                    -->
+                    <failIfNoTests>false</failIfNoTests>
+
+                </configuration>
+
+            </plugin>
+
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
