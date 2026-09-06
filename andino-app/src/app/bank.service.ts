@@ -5,7 +5,7 @@ import { Account, CreateAccountRequest, Transaction, TransferRequest } from './b
 @Injectable({ providedIn: 'root' })
 export class BankService {
   private readonly http = inject(HttpClient);
-  private readonly apiUrl = 'http://localhost:8080/api/v1';
+  private readonly apiUrl = '/api/v1';
 
   getAccounts() {
     return this.http.get<Account[]>(`${this.apiUrl}/accounts`);

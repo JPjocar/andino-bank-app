@@ -1,0 +1,52 @@
+name: Frontend CI
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+    paths:
+      - 'andino-app/**'
+      - '.github/workflows/frontend-ci.yml'
+
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-ci:
+    name: Angular Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: andino-app
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: andino-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:ci
+
+      - name: Production build
+        run: npm run build:prod

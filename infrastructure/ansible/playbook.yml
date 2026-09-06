@@ -1,0 +1,83 @@
+---
+- name: Prepare Andino Bank staging server
+  hosts: staging
+  become: true
+
+  vars:
+    deploy_user: deploy
+    deploy_directory: /opt/bank-project
+    ssh_public_key_path: "~/.ssh/id_ed25519.pub"
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-v2
+          - curl
+          - ufw
+        state: present
+
+    - name: Enable Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create deployment user
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        groups:
+          - docker
+        append: true
+        shell: /bin/bash
+        create_home: true
+
+    - name: Create deployment SSH directory
+      ansible.builtin.file:
+        path: "/home/{{ deploy_user }}/.ssh"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0700"
+
+    - name: Install deployment SSH public key
+      ansible.builtin.copy:
+        content: "{{ lookup('file', ssh_public_key_path) }}"
+        dest: "/home/{{ deploy_user }}/.ssh/authorized_keys"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0600"
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: "{{ deploy_directory }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
+    - name: Allow SSH through firewall
+      ansible.builtin.command:
+        cmd: ufw allow OpenSSH
+      changed_when: false
+
+    - name: Allow HTTP through firewall
+      ansible.builtin.command:
+        cmd: ufw allow 80/tcp
+      changed_when: false
+
+    - name: Allow HTTPS through firewall
+      ansible.builtin.command:
+        cmd: ufw allow 443/tcp
+      changed_when: false
+
+    - name: Enable firewall
+      ansible.builtin.command:
+        cmd: ufw --force enable
+      changed_when: false

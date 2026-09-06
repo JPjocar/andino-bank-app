@@ -1,0 +1,188 @@
+name: Release Staging
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  GHCR_NAMESPACE: jpjocar
+
+jobs:
+  backend:
+    name: Validate and publish backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+          cache-dependency-path: bank-api/pom.xml
+
+      - name: Enable Maven Wrapper
+        working-directory: bank-api
+        run: chmod +x mvnw
+
+      - name: Validate backend
+        working-directory: bank-api
+        run: ./mvnw --batch-mode --no-transfer-progress clean verify
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./bank-api
+          file: ./bank-api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.GHCR_NAMESPACE }}/bank-backend:${{ github.sha }}
+
+  frontend:
+    name: Validate and publish frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: andino-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: andino-app
+        run: npm ci
+
+      - name: Lint
+        working-directory: andino-app
+        run: npm run lint
+
+      - name: Unit tests
+        working-directory: andino-app
+        run: npm run test:ci
+
+      - name: Production build
+        working-directory: andino-app
+        run: npm run build:prod
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./andino-app
+          file: ./andino-app/Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.GHCR_NAMESPACE }}/bank-frontend:${{ github.sha }}
+
+  deploy:
+    name: Deploy to OVH staging
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$STAGING_HOST" >> ~/.ssh/known_hosts
+
+      - name: Create staging environment file
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          cat > staging.env <<EOF
+          GHCR_NAMESPACE=${GHCR_NAMESPACE}
+          BACKEND_TAG=${GITHUB_SHA}
+          FRONTEND_TAG=${GITHUB_SHA}
+          POSTGRES_DB=bankdb
+          POSTGRES_USER=bankapp
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          EOF
+          chmod 600 staging.env
+
+      - name: Copy deployment files
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          scp infrastructure/docker/docker-compose.staging.yml \
+            "${STAGING_USER}@${STAGING_HOST}:/opt/bank-project/docker-compose.staging.yml"
+          scp staging.env \
+            "${STAGING_USER}@${STAGING_HOST}:/opt/bank-project/.env"
+
+      - name: Authenticate VPS against GHCR
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_READ_TOKEN" | ssh "${STAGING_USER}@${STAGING_HOST}" \
+            "docker login ghcr.io -u '${GHCR_NAMESPACE}' --password-stdin"
+
+      - name: Deploy application
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          ssh "${STAGING_USER}@${STAGING_HOST}" <<'EOF'
+          set -e
+          cd /opt/bank-project
+          docker compose -f docker-compose.staging.yml --env-file .env pull
+          docker compose -f docker-compose.staging.yml --env-file .env up -d
+
+          echo "Waiting for backend..."
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8081/actuator/health; then
+              echo ""
+              echo "Backend is healthy."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Backend health check failed."
+          docker compose -f docker-compose.staging.yml --env-file .env logs backend
+          exit 1
+          EOF

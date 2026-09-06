@@ -1,5 +1,5 @@
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { Component, computed, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { Account, Transaction } from './bank.models';
@@ -12,6 +12,7 @@ import { BankService } from './bank.service';
   styleUrl: './app.css'
 })
 export class App implements OnInit {
+  private readonly bankService = inject(BankService);
   protected readonly accounts = signal<Account[]>([]);
   protected readonly selectedAccount = signal<Account | null>(null);
   protected readonly transactions = signal<Transaction[]>([]);
@@ -30,8 +31,6 @@ export class App implements OnInit {
   protected destinationId = '';
   protected ownerName = '';
   protected initialBalance = 0;
-
-  constructor(private readonly bankService: BankService) {}
 
   ngOnInit(): void {
     this.loadAccounts();

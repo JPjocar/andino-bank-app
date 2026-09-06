@@ -50,3 +50,21 @@ jobs:
       # 4. Ejecutar todo el ciclo de validación
       - name: Maven Clean Verify
         run: ./mvnw --batch-mode clean verify
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco-report
+          path: bank-api/target/site/jacoco/
+          if-no-files-found: warn
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            bank-api/target/surefire-reports/
+            bank-api/target/failsafe-reports/
+          if-no-files-found: warn

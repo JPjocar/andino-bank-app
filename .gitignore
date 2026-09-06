@@ -1,0 +1,12 @@
+# Local deployment notes and credentials
+/taks.txt
+/datos que faltan.txt
+
+# Local staging configuration
+/infrastructure/docker/.env
+
+# SSH keys and local secret material
+*.pem
+*.key
+id_ed25519
+id_ed25519.pub
