@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
           cache: maven
           cache-dependency-path: bank-api/pom.xml
 
@@ -69,7 +69,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
           cache-dependency-path: andino-app/package-lock.json
 
@@ -166,23 +166,30 @@ jobs:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
         run: |
-          ssh "${STAGING_USER}@${STAGING_HOST}" <<'EOF'
-          set -e
+          ssh "${STAGING_USER}@${STAGING_HOST}" bash -se <<'EOF'
+          set -Eeuo pipefail
           cd /opt/bank-project
           docker compose -f docker-compose.staging.yml --env-file .env pull
           docker compose -f docker-compose.staging.yml --env-file .env up -d
 
           echo "Waiting for backend..."
+          healthy=0
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8081/actuator/health; then
-              echo ""
-              echo "Backend is healthy."
-              exit 0
+            if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
+              http://127.0.0.1:8081/actuator/health; then
+              healthy=1
+              break
             fi
             sleep 5
           done
 
-          echo "Backend health check failed."
-          docker compose -f docker-compose.staging.yml --env-file .env logs backend
-          exit 1
+          if [ "$healthy" -ne 1 ]; then
+            echo "Backend health check failed."
+            docker compose -f docker-compose.staging.yml --env-file .env logs backend
+            exit 1
+          fi
+
+          echo ""
+          echo "Backend is healthy."
+          docker compose -f docker-compose.staging.yml --env-file .env ps
           EOF
